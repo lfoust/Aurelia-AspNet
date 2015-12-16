@@ -1,0 +1,23 @@
+﻿{
+  "version": "1.0.0-*",
+  "description": "RsaKeyGenerator Console Application",
+  "authors": [ "lfous" ],
+  "tags": [ "" ],
+  "projectUrl": "",
+  "licenseUrl": "",
+
+  "compilationOptions": {
+    "emitEntryPoint": true
+  },
+
+  "dependencies": {
+  },
+
+  "commands": {
+    "RsaKeyGenerator": "RsaKeyGenerator"
+  },
+
+  "frameworks": {
+    "dnx451": { }
+  }
+}
