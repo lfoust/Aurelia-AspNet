@@ -9,6 +9,8 @@ namespace AureliaAspNet.Models
         [JsonProperty]
         public string FacebookId { get; set; }
         [JsonProperty]
+        public string GoogleId { get; set; }
+        [JsonProperty]
         public string Picture { get; set; }
     }
 }

@@ -2,10 +2,11 @@ var configForDevelopment = {
     loginRedirect: "/",
     providers: {
         google: {
-            clientId: '239531826023-ibk10mb9p7ull54j55a61og5lvnjrff6.apps.googleusercontent.com'
-        }
-        ,
-        facebook:{
+            clientId: '222122584408-cpgbe0oa1h75rs1hkqc8paulks6d1ufl.apps.googleusercontent.com',
+            redirectUri: "http://localhost:7822/authenticate",
+            scope: ['profile', 'email']
+        },
+        facebook: {
             clientId:'432745350213934',
             redirectUri: "http://localhost:7822/authenticate"
         }
@@ -15,9 +16,8 @@ var configForDevelopment = {
 var configForProduction = {
     providers: {
         google: {
-            clientId: '239531826023-3ludu3934rmcra3oqscc1gid3l9o497i.apps.googleusercontent.com'
-        }
-        ,
+            clientId: '222122584408-cpgbe0oa1h75rs1hkqc8paulks6d1ufl.apps.googleusercontent.com'
+        },
         facebook:{
             clientId:'432745350213934'
         }

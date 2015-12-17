@@ -31,6 +31,14 @@
             <i class="ion-social-facebook"></i> Link Facebook Account
           </button>
         </div>
+        <div class="btn-group-vertical">
+          <button class="btn btn-sm btn-danger" if.bind="profile.googleId" click.delegate="unlink('google')">
+            <i class="ion-social-google"></i> Unlink Google Account
+          </button>
+          <button class="btn btn-sm btn-primary" if.bind="!profile.googleId" click.delegate="link('google')">
+            <i class="ion-social-google"></i> Link Google Account
+          </button>
+        </div>
       </div>
     </div>
   </div>

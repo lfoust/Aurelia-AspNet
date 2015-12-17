@@ -2,7 +2,7 @@ namespace AureliaAspNet.Models
 {
     using Newtonsoft.Json;
 
-    public class FacebookAuthResponse
+    public class AuthResponse
     {
         [JsonProperty("code")]
         public string Code { get; set; }

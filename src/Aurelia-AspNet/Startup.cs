@@ -21,6 +21,7 @@
     public static class ConfigurationKeys
     {
         public const string FacebookSecret = "FacebookSecret";
+        public const string GoogleSecret = "GoogleSecret";
         public const string RsaXml = "RSAXml";
     }
 

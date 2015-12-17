@@ -7,6 +7,7 @@ namespace AureliaAspNet.Services
     {
         Task<User> FindById(string id);
         Task<User> FindByFacebookId(string id);
+        Task<User> FindByGoogleId(string id);
         Task Add(User user);
         Task Update(User user);
         Task Delete(string id);
@@ -20,12 +21,18 @@ namespace AureliaAspNet.Services
             {
                 Id = id,
                 UserName = "User " + id,
-                FacebookId = id
+                FacebookId = id,
+                GoogleId = id
             };
             return Task.FromResult(user);
         }
 
         public Task<User> FindByFacebookId(string id)
+        {
+            return this.FindById(id);
+        }
+
+        public Task<User> FindByGoogleId(string id)
         {
             return this.FindById(id);
         }

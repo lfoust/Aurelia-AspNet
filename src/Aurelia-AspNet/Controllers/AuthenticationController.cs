@@ -2,7 +2,6 @@
 {
     using System.IdentityModel.Tokens;
     using Microsoft.AspNet.Mvc;
-    using System.IO;
     using System.Linq;
     using System.Net.Http;
     using System.Security.Claims;
@@ -16,13 +15,17 @@
     using AureliaAspNet.Configuration;
     using AureliaAspNet.Services;
     using Microsoft.Extensions.Configuration;
+    using System.Collections.Generic;
+    using System;
 
     public class AuthenticationController : BaseApiController
     {
         private readonly IConfigurationRoot configuration;
         private readonly IUserService userService;
-        const string AccessTokenUrl = "https://graph.facebook.com/v2.5/oauth/access_token";
-        const string GraphApiUrl = "https://graph.facebook.com/v2.5/me";
+        const string FacebookAccessTokenUrl = "https://graph.facebook.com/v2.5/oauth/access_token";
+        const string FacebookGraphApiUrl = "https://graph.facebook.com/v2.5/me";
+        const string GoogleAccessTokenUrl = "https://accounts.google.com/o/oauth2/token";
+        const string GooglePeopleApiUrl = "https://www.googleapis.com/plus/v1/people/me/openIdConnect";
         private readonly JwtBearerOptions bearerOptions;
         private readonly SigningCredentials signingCredentials;
 
@@ -53,7 +56,63 @@
         }
 
         [HttpPost]
-        public async Task<IActionResult> Facebook([FromBody]FacebookAuthResponse authResponse)
+        public async Task<IActionResult> Google([FromBody]AuthResponse authResponse)
+        {
+            using (var client = new HttpClient())
+            {
+                // Step 1. Exchange authorization code for access token.
+                var queryStringParams = new
+                {
+                    code = authResponse.Code,
+                    client_id = authResponse.ClientId,
+                    client_secret = this.configuration[ConfigurationKeys.GoogleSecret],
+                    redirect_uri = authResponse.RedirectUri,
+                    grant_type = "authorization_code"
+                };
+                string queryString = UrlHelper.BuildParameters(queryStringParams);
+                var request = new HttpRequestMessage
+                {
+                    RequestUri = new System.Uri(GoogleAccessTokenUrl),
+                    Content = new StringContent(queryString),
+                    Method = HttpMethod.Post
+                };
+
+                request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/x-www-form-urlencoded");
+
+                var response = await client.SendAsync(request);
+                if (response.IsSuccessStatusCode)
+                {
+                    string accessTokenJson = await response.Content.ReadAsStringAsync();
+                    var authTokenResponse = JsonConvert.DeserializeObject<AuthTokenResponse>(accessTokenJson);
+
+                    var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+                    var securityToken = handler.ReadJwtToken(authTokenResponse.IdToken);
+                    string googleId = this.TryGetClaim("sub", securityToken.Claims);
+                    string email = this.TryGetClaim("email", securityToken.Claims);
+                    string picture = this.TryGetClaim("picture", securityToken.Claims);
+                    string name = this.TryGetClaim("name", securityToken.Claims);
+
+                    // Step 3b. Create a new user account or return an existing one.
+                    return await this.HandleExternalUser(googleId, email, name, picture, this.userService.FindByGoogleId, (user, id) => user.GoogleId = id);
+                }
+            }
+
+            return this.HttpUnauthorized();
+        }
+
+        private string TryGetClaim(string type, IEnumerable<Claim> claims, string defaultValue = null)
+        {
+            var claim = claims.FirstOrDefault(c => c.Type.Equals(type, System.StringComparison.InvariantCultureIgnoreCase));
+            if(claim != null)
+            {
+                return claim.Value;
+            }
+
+            return defaultValue;
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> Facebook([FromBody]AuthResponse authResponse)
         {
             using (var client = new HttpClient())
             {
@@ -67,16 +126,16 @@
                 };
 
                 string queryString = UrlHelper.BuildParameters(queryStringParams);
-                string url = AccessTokenUrl + "?" + queryString;
+                string url = FacebookAccessTokenUrl + "?" + queryString;
 
                 var response = await client.GetAsync(url);
                 if (response.IsSuccessStatusCode)
                 {
                     string accessTokenJson = await response.Content.ReadAsStringAsync();
-                    var authTokenResponse = JsonConvert.DeserializeObject<FacebookAuthTokenResponse>(accessTokenJson);
+                    var authTokenResponse = JsonConvert.DeserializeObject<AuthTokenResponse>(accessTokenJson);
 
                     // Step 2. Retrieve profile information about the current user.
-                    url = GraphApiUrl + "?" + UrlHelper.BuildParameters(new { access_token = authTokenResponse.AccessToken });
+                    url = FacebookGraphApiUrl + "?" + UrlHelper.BuildParameters(new { access_token = authTokenResponse.AccessToken });
 
                     response = await client.GetAsync(url);
                     if (response.IsSuccessStatusCode)
@@ -86,71 +145,50 @@
 
                         var existingUser = await this.userService.FindByFacebookId(facebookUser.Id);
 
-                        var authHeaders = this.Request.Headers["Authorization"];
-                        if (authHeaders.Any())
-                        {
-                            if (existingUser != null)
-                            {
-                                return new HttpStatusCodeResult(409); // This facebook id is already associated with a user
-                            }
-
-                            var authCode = authHeaders.First();
-                            if (!string.IsNullOrEmpty(authCode))
-                            {
-                                authCode = authCode.Split(' ').ElementAtOrDefault(1);
-                                if (!string.IsNullOrEmpty(authCode))
-                                {
-                                    //var payload = DecodeJwtToken(authCode);
-                                    //existingUser = await this.userService.FindByFacebookId(payload.Sub);
-                                    //if (existingUser == null)
-                                    //{
-                                    //    return new HttpStatusCodeResult(400); // user not found
-                                    //}
-
-                                    //existingUser.FacebookId = facebookUser.Id;
-
-                                    //if (string.IsNullOrEmpty(existingUser.Picture))
-                                    //{
-                                    //    existingUser.Picture = $"https://graph.facebook.com/{facebookUser.Id}//picture?type=large";
-                                    //}
-
-                                    //if (string.IsNullOrEmpty(existingUser.UserName))
-                                    //{
-                                    //    existingUser.UserName = facebookUser.Name;
-                                    //}
-
-                                    //await this.userService.Update(existingUser);
-                                    //string token = this.CreateJwtToken(existingUser);
-                                    //return this.Json(new { token });
-                                }
-                            }
-                        }
-                        else
-                        {
-                            // Step 3b. Create a new user account or return an existing one.
-                            string token;
-                            if (existingUser != null)
-                            {
-                                token = this.CreateJwtToken(existingUser);
-                                return this.Json(new { token });
-                            }
-
-                            var user = new User
-                            {
-                                FacebookId = facebookUser.Id,
-                                UserName = facebookUser.Name,
-                                Picture = $"https://graph.facebook.com/{facebookUser.Id}//picture?type=large",
-                            };
-
-                            await this.userService.Add(user);
-                            token = this.CreateJwtToken(user);
-                            return this.Json(new { token });
-                        }
+                        // Step 3b. Create a new user account or return an existing one.
+                        return await this.HandleExternalUser(facebookUser.Id, "", facebookUser.Name, $"https://graph.facebook.com/{facebookUser.Id}//picture?type=large", this.userService.FindByFacebookId, (user, id) => user.FacebookId = id);
                     }
                 }
             }
 
             return this.HttpUnauthorized();
+        }
+
+        private async Task<IActionResult> HandleExternalUser(string userId, string email, string name, string picture, 
+            Func<string, Task<User>> findUser,
+            Action<User, string> setId)
+        {
+            if(string.IsNullOrEmpty(userId))
+            {
+                return this.HttpUnauthorized();
+            }
+
+            var existingUser = await findUser(userId);
+
+            string token;
+            if (existingUser != null)
+            {
+                token = this.CreateJwtToken(existingUser);
+                return this.Json(new { token });
+            }
+
+            string userName = string.IsNullOrEmpty(name) ? email : name;
+            if(string.IsNullOrEmpty(userName))
+            {
+                userName = userId;
+            }
+
+            var user = new User
+            {
+                UserName = name,
+                Picture = picture,
+            };
+
+            setId(user, userId);
+
+            await this.userService.Add(user);
+            token = this.CreateJwtToken(user);
+            return this.Json(new { token });
         }
 
         private string CreateJwtToken(User user)
